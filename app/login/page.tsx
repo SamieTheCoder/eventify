@@ -40,14 +40,26 @@ function GoogleIcon() {
   );
 }
 
+type AuthMode = "password" | "otp";
+
 export default function LoginPage() {
   const router = useRouter();
+  const [mode, setMode] = useState<AuthMode>("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [otpToken, setOtpToken] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  function switchMode(next: AuthMode) {
+    setMode(next);
+    setError("");
+    setOtpSent(false);
+    setOtpToken("");
+  }
+
+  async function handlePasswordSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setLoading(true);
@@ -56,6 +68,45 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
+    });
+
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    router.push("/dashboard");
+  }
+
+  async function handleSendOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOtp({ email });
+
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    setOtpSent(true);
+    setLoading(false);
+  }
+
+  async function handleVerifyOtp(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: otpToken,
+      type: "email",
     });
 
     if (error) {
@@ -102,53 +153,160 @@ export default function LoginPage() {
           </CardHeader>
 
           <CardContent>
-            <form onSubmit={handleSubmit} className="grid gap-4">
-              {/* Email */}
-              <div className="grid gap-2">
-                <Label htmlFor="email" className="text-zinc-300">
-                  Email
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
-                />
-              </div>
-
-              {/* Password */}
-              <div className="grid gap-2">
-                <Label htmlFor="password" className="text-zinc-300">
-                  Password
-                </Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
-                />
-              </div>
-
-              {/* Error */}
-              {error && (
-                <p className="text-sm text-red-400">{error}</p>
-              )}
-
-              {/* Submit */}
-              <Button
-                type="submit"
-                disabled={loading}
-                className="h-11 w-full rounded-lg bg-zinc-100 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-200 disabled:opacity-50"
+            {/* Mode toggle */}
+            <div className="mb-4 flex rounded-lg border border-zinc-800 bg-zinc-950 p-1">
+              <button
+                type="button"
+                onClick={() => switchMode("password")}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  mode === "password"
+                    ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
               >
-                {loading ? "Signing in…" : "Sign in"}
-              </Button>
-            </form>
+                Password
+              </button>
+              <button
+                type="button"
+                onClick={() => switchMode("otp")}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  mode === "otp"
+                    ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                Email code
+              </button>
+            </div>
+
+            {mode === "password" ? (
+              /* ── Password form ── */
+              <form onSubmit={handlePasswordSubmit} className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="email" className="text-zinc-300">
+                    Email
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
+                  />
+                </div>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="password" className="text-zinc-300">
+                    Password
+                  </Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
+                  />
+                </div>
+
+                {error && (
+                  <p className="text-sm text-red-400">{error}</p>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="h-11 w-full rounded-lg bg-zinc-100 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-200 disabled:opacity-50"
+                >
+                  {loading ? "Signing in…" : "Sign in"}
+                </Button>
+              </form>
+            ) : !otpSent ? (
+              /* ── OTP step 1: enter email ── */
+              <form onSubmit={handleSendOtp} className="grid gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="otp-email" className="text-zinc-300">
+                    Email
+                  </Label>
+                  <Input
+                    id="otp-email"
+                    type="email"
+                    placeholder="you@example.com"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
+                  />
+                </div>
+
+                {error && (
+                  <p className="text-sm text-red-400">{error}</p>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="h-11 w-full rounded-lg bg-zinc-100 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-200 disabled:opacity-50"
+                >
+                  {loading ? "Sending code…" : "Send code"}
+                </Button>
+              </form>
+            ) : (
+              /* ── OTP step 2: enter code ── */
+              <form onSubmit={handleVerifyOtp} className="grid gap-4">
+                <p className="text-sm text-zinc-400">
+                  We sent a 6-digit code to{" "}
+                  <span className="font-medium text-zinc-300">{email}</span>
+                </p>
+
+                <div className="grid gap-2">
+                  <Label htmlFor="otp-token" className="text-zinc-300">
+                    Verification code
+                  </Label>
+                  <Input
+                    id="otp-token"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="000000"
+                    required
+                    maxLength={6}
+                    value={otpToken}
+                    onChange={(e) =>
+                      setOtpToken(e.target.value.replace(/\D/g, ""))
+                    }
+                    className="border-zinc-700 bg-zinc-900 text-center text-lg tracking-[0.3em] text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
+                  />
+                </div>
+
+                {error && (
+                  <p className="text-sm text-red-400">{error}</p>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={loading || otpToken.length < 6}
+                  className="h-11 w-full rounded-lg bg-zinc-100 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-200 disabled:opacity-50"
+                >
+                  {loading ? "Verifying…" : "Verify & sign in"}
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtpSent(false);
+                    setOtpToken("");
+                    setError("");
+                  }}
+                  className="text-sm text-zinc-500 hover:text-zinc-300"
+                >
+                  Use a different email
+                </button>
+              </form>
+            )}
 
             {/* Separator */}
             <div className="relative my-6 flex items-center">
