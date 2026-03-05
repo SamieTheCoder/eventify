@@ -40,7 +40,10 @@ function GoogleIcon() {
   );
 }
 
-type AuthMode = "password" | "otp";
+type AuthMode = "password" | "otp" | "magic-link";
+
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "");
 
 export default function LoginPage() {
   const router = useRouter();
@@ -49,6 +52,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [otpToken, setOtpToken] = useState("");
   const [otpSent, setOtpSent] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -57,6 +61,7 @@ export default function LoginPage() {
     setError("");
     setOtpSent(false);
     setOtpToken("");
+    setMagicLinkSent(false);
   }
 
   async function handlePasswordSubmit(e: React.FormEvent) {
@@ -118,12 +123,35 @@ export default function LoginPage() {
     router.push("/dashboard");
   }
 
+  async function handleSendMagicLink(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: siteUrl + "/auth/callback",
+      },
+    });
+
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    setMagicLinkSent(true);
+    setLoading(false);
+  }
+
   async function handleGoogleLogin() {
     const supabase = createClient();
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: window.location.origin + "/auth/callback",
+        redirectTo: siteUrl + "/auth/callback",
       },
     });
   }
@@ -177,6 +205,17 @@ export default function LoginPage() {
               >
                 Email code
               </button>
+              <button
+                type="button"
+                onClick={() => switchMode("magic-link")}
+                className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                  mode === "magic-link"
+                    ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                Magic link
+              </button>
             </div>
 
             {mode === "password" ? (
@@ -224,15 +263,99 @@ export default function LoginPage() {
                   {loading ? "Signing in…" : "Sign in"}
                 </Button>
               </form>
-            ) : !otpSent ? (
-              /* ── OTP step 1: enter email ── */
-              <form onSubmit={handleSendOtp} className="grid gap-4">
+            ) : mode === "otp" ? (
+              !otpSent ? (
+                /* ── OTP step 1: enter email ── */
+                <form onSubmit={handleSendOtp} className="grid gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="otp-email" className="text-zinc-300">
+                      Email
+                    </Label>
+                    <Input
+                      id="otp-email"
+                      type="email"
+                      placeholder="you@example.com"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="border-zinc-700 bg-zinc-900 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
+                    />
+                  </div>
+
+                  {error && (
+                    <p className="text-sm text-red-400">{error}</p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="h-11 w-full rounded-lg bg-zinc-100 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-200 disabled:opacity-50"
+                  >
+                    {loading ? "Sending code…" : "Send code"}
+                  </Button>
+                </form>
+              ) : (
+                /* ── OTP step 2: enter code ── */
+                <form onSubmit={handleVerifyOtp} className="grid gap-4">
+                  <p className="text-sm text-zinc-400">
+                    We sent a 6-digit code to{" "}
+                    <span className="font-medium text-zinc-300">{email}</span>
+                  </p>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="otp-token" className="text-zinc-300">
+                      Verification code
+                    </Label>
+                    <Input
+                      id="otp-token"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="000000"
+                      required
+                      maxLength={6}
+                      value={otpToken}
+                      onChange={(e) =>
+                        setOtpToken(e.target.value.replace(/\D/g, ""))
+                      }
+                      className="border-zinc-700 bg-zinc-900 text-center text-lg tracking-[0.3em] text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
+                    />
+                  </div>
+
+                  {error && (
+                    <p className="text-sm text-red-400">{error}</p>
+                  )}
+
+                  <Button
+                    type="submit"
+                    disabled={loading || otpToken.length < 6}
+                    className="h-11 w-full rounded-lg bg-zinc-100 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-200 disabled:opacity-50"
+                  >
+                    {loading ? "Verifying…" : "Verify & sign in"}
+                  </Button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOtpSent(false);
+                      setOtpToken("");
+                      setError("");
+                    }}
+                    className="text-sm text-zinc-500 hover:text-zinc-300"
+                  >
+                    Use a different email
+                  </button>
+                </form>
+              )
+            ) : !magicLinkSent ? (
+              /* ── Magic link: enter email ── */
+              <form onSubmit={handleSendMagicLink} className="grid gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="otp-email" className="text-zinc-300">
+                  <Label htmlFor="ml-email" className="text-zinc-300">
                     Email
                   </Label>
                   <Input
-                    id="otp-email"
+                    id="ml-email"
                     type="email"
                     placeholder="you@example.com"
                     required
@@ -251,61 +374,46 @@ export default function LoginPage() {
                   disabled={loading}
                   className="h-11 w-full rounded-lg bg-zinc-100 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-200 disabled:opacity-50"
                 >
-                  {loading ? "Sending code…" : "Send code"}
+                  {loading ? "Sending link…" : "Send magic link"}
                 </Button>
               </form>
             ) : (
-              /* ── OTP step 2: enter code ── */
-              <form onSubmit={handleVerifyOtp} className="grid gap-4">
-                <p className="text-sm text-zinc-400">
-                  We sent a 6-digit code to{" "}
-                  <span className="font-medium text-zinc-300">{email}</span>
-                </p>
-
-                <div className="grid gap-2">
-                  <Label htmlFor="otp-token" className="text-zinc-300">
-                    Verification code
-                  </Label>
-                  <Input
-                    id="otp-token"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    placeholder="000000"
-                    required
-                    maxLength={6}
-                    value={otpToken}
-                    onChange={(e) =>
-                      setOtpToken(e.target.value.replace(/\D/g, ""))
-                    }
-                    className="border-zinc-700 bg-zinc-900 text-center text-lg tracking-[0.3em] text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600"
-                  />
+              /* ── Magic link: sent confirmation ── */
+              <div className="grid gap-3 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10">
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-emerald-500"
+                  >
+                    <path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9" />
+                    <polyline points="22 7 13.5 12.5 2 7" />
+                    <path d="m16 19 2 2 4-4" />
+                  </svg>
                 </div>
-
-                {error && (
-                  <p className="text-sm text-red-400">{error}</p>
-                )}
-
-                <Button
-                  type="submit"
-                  disabled={loading || otpToken.length < 6}
-                  className="h-11 w-full rounded-lg bg-zinc-100 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-200 disabled:opacity-50"
-                >
-                  {loading ? "Verifying…" : "Verify & sign in"}
-                </Button>
-
+                <p className="text-sm text-zinc-400">
+                  We sent a sign-in link to{" "}
+                  <span className="font-medium text-zinc-300">{email}</span>.
+                  <br />
+                  Click it to sign in — no password needed.
+                </p>
                 <button
                   type="button"
                   onClick={() => {
-                    setOtpSent(false);
-                    setOtpToken("");
+                    setMagicLinkSent(false);
                     setError("");
                   }}
                   className="text-sm text-zinc-500 hover:text-zinc-300"
                 >
                   Use a different email
                 </button>
-              </form>
+              </div>
             )}
 
             {/* Separator */}
