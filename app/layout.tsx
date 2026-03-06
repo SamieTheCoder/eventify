@@ -7,15 +7,19 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
+
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Eventify",
-  description: "Track your work. Log it to Google Calendar.",
-};
+  title: 'Eventify',
+  description: 'Track your work. Log it to Google Calendar.',
+  verification: {
+    google: 'UnnAL4Su6AUluLbZtqmDqoZ7qODsyEerIp6vnrIxADk',  // just the content value, not full tag
+  },
+}
 
 export default function RootLayout({
   children,

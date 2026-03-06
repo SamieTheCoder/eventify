@@ -290,6 +290,22 @@ export default function Hero({ isLoggedIn = false }: HeroProps) {
             )}
           </div>
         </div>
+        <p className="text-xs text-zinc-600">
+          © {new Date().getFullYear()} Eventify ·{" "}
+          <Link
+            href="/privacy"
+            className="underline underline-offset-4 hover:text-zinc-400"
+          >
+            Privacy Policy
+          </Link>
+          {" · "}
+          <Link
+            href="/terms"
+            className="underline underline-offset-4 hover:text-zinc-400"
+          >
+            Terms of Service
+          </Link>
+        </p>
       </footer>
     </div>
   );
