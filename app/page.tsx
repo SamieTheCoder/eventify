@@ -1,5 +1,9 @@
-import Hero from "@/component/Hero";
+import { createClient } from '@/lib/supabase/server'
+import Hero from '@/component/Hero'
 
-export default function Home() {
-  return <Hero />;
+export default async function Home() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  return <Hero isLoggedIn={!!user} />
 }
